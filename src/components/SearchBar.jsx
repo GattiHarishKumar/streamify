@@ -7,8 +7,12 @@ export default function SearchBar({
   genres,
   selectedGenre,
   setSelectedGenre,
+  languages,
+  selectedLanguage,
+  setSelectedLanguage,
   minRating,
   setMinRating,
+  onClearFilters,
 }) {
   return (
     <div className="search-bar">
@@ -23,6 +27,12 @@ export default function SearchBar({
           <option value={g.id} key={g.id}>{g.name}</option>
         ))}
       </select>
+      <select value={selectedLanguage} onChange={(e) => setSelectedLanguage(e.target.value)}>
+        <option value="">All languages</option>
+        {languages.map(lang => (
+          <option value={lang.code} key={lang.code}>{lang.name}</option>
+        ))}
+      </select>
       <select value={minRating} onChange={(e) => setMinRating(e.target.value)}>
         <option value={0}>All ratings</option>
         {[...Array(10)].map((_, i) => (
@@ -30,6 +40,7 @@ export default function SearchBar({
         ))}
       </select>
       <button onClick={onSearch}>Search</button>
+      <button onClick={onClearFilters} type="button">Clear Filters</button>
     </div>
   );
 }

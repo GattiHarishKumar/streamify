@@ -9,8 +9,10 @@ function App() {
   const [movies, setMovies] = useState([]);
   const [genres, setGenres] = useState([]);
   const [genresMap, setGenresMap] = useState({});
+  const [languages, setLanguages] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('');
   const [minRating, setMinRating] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,26 +36,53 @@ function App() {
     fetchGenres();
   }, []);
 
+  useEffect(() => {
+    const fetchLanguages = async () => {
+      try {
+        const res = await tmdb.get('/configuration/languages');
+        const list = (res.data || [])
+          .map(lang => ({
+            code: lang.iso_639_1 || '',
+            name: lang.english_name || lang.name || lang.iso_639_1 || 'Unknown',
+          }))
+          .filter(lang => lang.code);
+        setLanguages(list);
+      } catch (err) {
+        console.error('Failed to load languages.', err);
+      }
+    };
+    fetchLanguages();
+  }, []);
+
   // Fetch movies function
-  const fetchMovies = async (pageNum = 1) => {
+  const fetchMovies = async (pageNum = 1, overrides = {}) => {
+    const activeSearchTerm = overrides.searchTerm ?? searchTerm;
+    const activeSelectedGenre = overrides.selectedGenre ?? selectedGenre;
+    const activeSelectedLanguage = overrides.selectedLanguage ?? selectedLanguage;
+    const activeMinRating = overrides.minRating ?? minRating;
+
     setLoading(true);
     setError('');
     try {
       let results = [];
-      if (searchTerm.trim()) {
-        const res = await tmdb.get('/search/movie', { params: { query: searchTerm, page: pageNum } });
+      if (activeSearchTerm.trim()) {
+        const res = await tmdb.get('/search/movie', { params: { query: activeSearchTerm, page: pageNum } });
         results = res.data.results || [];
-        if (selectedGenre) {
-          results = results.filter(m => Array.isArray(m.genre_ids) && m.genre_ids.includes(Number(selectedGenre)));
+        if (activeSelectedGenre) {
+          results = results.filter(m => Array.isArray(m.genre_ids) && m.genre_ids.includes(Number(activeSelectedGenre)));
         }
-        if (minRating) {
-          results = results.filter(m => m.vote_average >= Number(minRating));
+        if (activeSelectedLanguage) {
+          results = results.filter(m => (m.original_language || '').toLowerCase() === activeSelectedLanguage.toLowerCase());
+        }
+        if (activeMinRating) {
+          results = results.filter(m => m.vote_average >= Number(activeMinRating));
         }
         setTotalPages(res.data.total_pages);
       } else {
         const params = { page: pageNum, sort_by: 'popularity.desc' };
-        if (selectedGenre) params.with_genres = selectedGenre;
-        if (minRating) params['vote_average.gte'] = minRating;
+        if (activeSelectedGenre) params.with_genres = activeSelectedGenre;
+        if (activeSelectedLanguage) params.with_original_language = activeSelectedLanguage;
+        if (activeMinRating) params['vote_average.gte'] = activeMinRating;
         const res = await tmdb.get('/discover/movie', { params });
         results = res.data.results || [];
         setTotalPages(res.data.total_pages);
@@ -68,6 +97,22 @@ function App() {
     }
   };
 
+  const clearFilters = () => {
+    const resetState = {
+      searchTerm: '',
+      selectedGenre: '',
+      selectedLanguage: '',
+      minRating: 0,
+    };
+
+    setSelectedGenre(resetState.selectedGenre);
+    setSelectedLanguage(resetState.selectedLanguage);
+    setMinRating(resetState.minRating);
+    setSearchTerm(resetState.searchTerm);
+    setPage(1);
+    fetchMovies(1, resetState);
+  };
+
   // Fetch initial movies
   useEffect(() => {
     fetchMovies();
@@ -76,7 +121,7 @@ function App() {
   return (
     <div className="app">
       <header>
-        <h1>STEAMIFY</h1>
+        <h1>STREAMIFY</h1>
       </header>
 
       <SearchBar
@@ -86,8 +131,12 @@ function App() {
         genres={genres}
         selectedGenre={selectedGenre}
         setSelectedGenre={setSelectedGenre}
+        languages={languages}
+        selectedLanguage={selectedLanguage}
+        setSelectedLanguage={setSelectedLanguage}
         minRating={minRating}
         setMinRating={setMinRating}
+        onClearFilters={clearFilters}
       />
 
       {error && <ErrorMessage message={error} />}
@@ -96,10 +145,29 @@ function App() {
 
       {/* Pagination buttons */}
       {!loading && movies.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16, gap: 8 }}>
-          <button disabled={page <= 1} onClick={() => fetchMovies(page - 1)}>⬅ Prev</button>
-          <span>Page {page} of {totalPages}</span>
-          <button disabled={page >= totalPages} onClick={() => fetchMovies(page + 1)}>Next ➡</button>
+        <div className="pagination-bar" aria-label="Movie pagination">
+          <button
+            className="pagination-button"
+            disabled={page <= 1}
+            onClick={() => fetchMovies(page - 1)}
+          >
+            ← Prev
+          </button>
+
+          <div className="pagination-indicator">
+            <span className="pagination-label">Page</span>
+            <strong>{page}</strong>
+            <span className="pagination-divider">/</span>
+            <span>{totalPages}</span>
+          </div>
+
+          <button
+            className="pagination-button"
+            disabled={page >= totalPages}
+            onClick={() => fetchMovies(page + 1)}
+          >
+            Next →
+          </button>
         </div>
       )}
 
