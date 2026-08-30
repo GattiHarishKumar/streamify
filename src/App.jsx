@@ -9,8 +9,10 @@ function App() {
   const [movies, setMovies] = useState([]);
   const [genres, setGenres] = useState([]);
   const [genresMap, setGenresMap] = useState({});
+  const [languages, setLanguages] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState('');
   const [minRating, setMinRating] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,6 +36,24 @@ function App() {
     fetchGenres();
   }, []);
 
+  useEffect(() => {
+    const fetchLanguages = async () => {
+      try {
+        const res = await tmdb.get('/configuration/languages');
+        const list = (res.data || [])
+          .map(lang => ({
+            code: lang.iso_639_1 || '',
+            name: lang.english_name || lang.name || lang.iso_639_1 || 'Unknown',
+          }))
+          .filter(lang => lang.code);
+        setLanguages(list);
+      } catch (err) {
+        console.error('Failed to load languages.', err);
+      }
+    };
+    fetchLanguages();
+  }, []);
+
   // Fetch movies function
   const fetchMovies = async (pageNum = 1) => {
     setLoading(true);
@@ -46,6 +66,9 @@ function App() {
         if (selectedGenre) {
           results = results.filter(m => Array.isArray(m.genre_ids) && m.genre_ids.includes(Number(selectedGenre)));
         }
+        if (selectedLanguage) {
+          results = results.filter(m => (m.original_language || '').toLowerCase() === selectedLanguage.toLowerCase());
+        }
         if (minRating) {
           results = results.filter(m => m.vote_average >= Number(minRating));
         }
@@ -53,6 +76,7 @@ function App() {
       } else {
         const params = { page: pageNum, sort_by: 'popularity.desc' };
         if (selectedGenre) params.with_genres = selectedGenre;
+        if (selectedLanguage) params.with_original_language = selectedLanguage;
         if (minRating) params['vote_average.gte'] = minRating;
         const res = await tmdb.get('/discover/movie', { params });
         results = res.data.results || [];
@@ -68,6 +92,15 @@ function App() {
     }
   };
 
+  const clearFilters = () => {
+    setSelectedGenre('');
+    setSelectedLanguage('');
+    setMinRating(0);
+    setSearchTerm('');
+    setPage(1);
+    fetchMovies(1);
+  };
+
   // Fetch initial movies
   useEffect(() => {
     fetchMovies();
@@ -76,7 +109,7 @@ function App() {
   return (
     <div className="app">
       <header>
-        <h1>STEAMIFY</h1>
+        <h1>STREAMIFY</h1>
       </header>
 
       <SearchBar
@@ -86,8 +119,12 @@ function App() {
         genres={genres}
         selectedGenre={selectedGenre}
         setSelectedGenre={setSelectedGenre}
+        languages={languages}
+        selectedLanguage={selectedLanguage}
+        setSelectedLanguage={setSelectedLanguage}
         minRating={minRating}
         setMinRating={setMinRating}
+        onClearFilters={clearFilters}
       />
 
       {error && <ErrorMessage message={error} />}
